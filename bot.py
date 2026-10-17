@@ -29,6 +29,7 @@ if not TOKEN:
 
 DB = "quest.db"
 ADMIN_IDS = {1467490182}  # ← впиши свой Telegram user_id (узнать: @userinfobot)
+PAUSE = 1.5               # пауза между сообщениями Хранителя, сек
 
 bot = Bot(TOKEN)
 dp = Dispatcher()
@@ -137,7 +138,7 @@ QUIZ_KB = inline_kb(["Марло", "Булгаков", "Гоголь"],
 #  ВАЛИДАЦИЯ РЕГИСТРАЦИИ
 # ============================================================
 
-def parse_vk(text: str):
+def parse_vk(text: str) -> str | None:
     """Принимает id123456, ссылку vk.com/id… или короткое имя."""
     t = (text or "").strip()
     m = re.search(r"(?:vk\.com/|vk\.ru/)?id(\d{4,})", t, re.I)
@@ -152,7 +153,7 @@ def parse_vk(text: str):
 
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
-def parse_email(text: str):
+def parse_email(text: str) -> str | None:
     t = (text or "").strip().lower()
     return t if EMAIL_RE.fullmatch(t) else None
 
@@ -174,8 +175,7 @@ CREATE_PLAYERS = (
     "last_seen REAL)")
 
 async def init_db():
-    """Создаёт базу и таблицу при старте бота — чтобы первый же запрос
-    к players не падал на пустой базе нового хостинга."""
+    """Создаёт базу и таблицу игроков при старте — до любого запроса."""
     async with aiosqlite.connect(DB) as db:
         await db.execute(CREATE_PLAYERS)
         await db.commit()
@@ -190,8 +190,7 @@ async def save(user_id, **fields):
         await db.commit()
 
 class Seen(BaseMiddleware):
-    """Лёгкая версия: один UPDATE на сообщение вместо четырёх запросов.
-    Регистрация игрока происходит в save() во время сценария регистрации."""
+    """Лёгкая версия: один UPDATE на сообщение вместо четырёх запросов."""
     async def __call__(self, handler, event, data):
         try:
             async with aiosqlite.connect(DB) as db:
@@ -319,12 +318,7 @@ async def quest_cmd(m: Message, state: FSMContext):
         await start_cmd(m, state)
         return
     lvl = row[0]
-    if lvl == 0:
-        await state.set_state(Quest.riddle)
-        await state.set_data({"r": 0})
-        await m.answer("Дело №1: «Тень на таблицах».\n\n" + RIDDLES[0][0])
-        return
-    if lvl == 1:
+    if lvl <= 1:
         await state.set_state(Quest.riddle)
         await state.set_data({"r": 0})
         await m.answer("Дело №1: «Тень на таблицах».\n\n" + RIDDLES[0][0])
@@ -352,13 +346,8 @@ async def quest_cmd(m: Message, state: FSMContext):
         await state.set_data({})
         await m.answer("Тень привела тебя обратно. " + L5_MAZE_TEXT, parse_mode="HTML")
         return
-    if lvl >= 6:
-        await state.set_state(Quest.done)
-        await m.answer("Архив закрыт. Хранитель тихонько полирует лампу 🕯")
-        return
-    await state.set_state(Quest.riddle)
-    await state.set_data({"r": 0})
-    await m.answer("Дело №1: «Тень на таблицах».\n\n" + RIDDLES[0][0])
+    await state.set_state(Quest.done)
+    await m.answer("Архив закрыт. Хранитель тихонько полирует лампу 🕯")
 
 @dp.message(Command("progress"))
 async def progress_cmd(m: Message):
@@ -424,8 +413,9 @@ async def email_input(m: Message, state: FSMContext):
     await save(m.from_user.id, email=email)
     await state.set_state(Quest.riddle)
     await state.set_data({"r": 0})
-    await m.answer("✅ Реестр подписан. Двери Архива скрипят и открываются…\n\n"
-                   "🕯 <b>Дело №1: «Тень на таблицах»</b>\n"
+    await m.answer("✅ Реестр подписан. Двери Архива скрипят и открываются…")
+    await asyncio.sleep(PAUSE)
+    await m.answer("🕯 <b>Дело №1: «Тень на таблицах»</b>\n"
                    "Один студент оставил незакрытый конспект — и теперь цифры шепчут по ночам.\n\n"
                    + RIDDLES[0][0], parse_mode="HTML")
 
@@ -447,12 +437,13 @@ async def riddle(m: Message, state: FSMContext):
             await state.set_state(Quest.sort_item)
             await state.update_data(idx=0)
             await reward(m, state, CODES[0],
-                         "✅ Конспект закрыт. Цифры замолчали — по крайней мере, до сессии.\n\n"
-                         "🕯 <b>Дело №2: «Мусор, который не призрак»</b>\n"
-                         "На чердаке Архива завёлся призрак. Присмотрись: это не призрак —\n"
-                         "это пластиковая бутылка 1997 года, которую забыли рассортировать.\n"
-                         "Разберём чердак!")
-            await m.answer("Куда отправить: <b>батарейка</b>?",
+                         "✅ Конспект закрыт. Цифры замолчали — по крайней мере, до сессии.")
+            await asyncio.sleep(PAUSE)
+            await m.answer("🕯 <b>Дело №2: «Мусор, который не призрак»</b>\n"
+                           "На чердаке Архива завёлся призрак. Присмотрись: это не призрак —\n"
+                           "это пластиковая бутылка 1997 года, которую забыли рассортировать.\n"
+                           "Разберём чердак!\n\n"
+                           "Куда отправить: <b>батарейка</b>?",
                            reply_markup=SORT_KB, parse_mode="HTML")
     else:
         await wrong(m, state, hint, "ответ: " + ", ".join(sorted(ans)))
@@ -525,6 +516,7 @@ async def bonus_ok(c: CallbackQuery, state: FSMContext):
     await reward_c(c, state, CODES[1],
                    "✅ Призрак рассортирован и наконец успокоился. Мусор, рассортированный вовремя,\n"
                    "не призрак, а ресурс.")
+    await asyncio.sleep(PAUSE)
     await c.message.answer(L3_CHOICE_TEXT, reply_markup=L3_KB, parse_mode="HTML")
 
 @dp.callback_query(Quest.sort_bonus_q)
@@ -571,6 +563,7 @@ async def l3_secret(m: Message, state: FSMContext):
         await reward(m, state, CODES[2],
                      "✅ Шифр разгадан — страница переписана набело, и дело получило имя.\n"
                      "Добро, сделанное ночью, светит вдвойне.")
+        await asyncio.sleep(PAUSE)
         await m.answer(L4_CHOICE_TEXT, reply_markup=L4_KB, parse_mode="HTML")
     else:
         await wrong(m, state,
@@ -587,6 +580,7 @@ async def l3_call(m: Message, state: FSMContext):
         await reward(m, state, digits,
                      "✅ История услышана — Тень улыбнулась. Такие разговоры,\n"
                      "пока звучат, не дают Теням расти.")
+        await asyncio.sleep(PAUSE)
         await m.answer(L4_CHOICE_TEXT, reply_markup=L4_KB, parse_mode="HTML")
     else:
         await wrong(m, state, "Нужен год первого класса — четыре цифры от 1900 до 2020.",
@@ -643,6 +637,7 @@ async def quiz_ok(c: CallbackQuery, state: FSMContext):
     await reward_c(c, state, CODES[3],
                    "✅ Кристофер Марло — современник Шекспира. Фауст, продавший душу,\n"
                    "в Архиве числится с 1588 года.")
+    await asyncio.sleep(PAUSE)
     await c.message.answer(L5_ENTRY, parse_mode="HTML")
 
 @dp.callback_query(Quest.l4_quiz)
@@ -654,12 +649,14 @@ async def quiz_wrong(c: CallbackQuery):
 async def l4_best(m: Message, state: FSMContext):
     words = re.findall(r"[а-яёА-ЯЁa-zA-Z]+", m.text or "")
     if len(words) == 3 and len(set(map(str.lower, words))) == 3:
-        await save(m.from_user.id, level=5, l3_names=", ".join(words))
+        await save(m.from_user.id, level=5)
         await state.set_state(Quest.l5_maze)
         await state.set_data({})
         await reward(m, state, CODES[3],
                      f"✅ Твоя Тень занесена в Бестиарий: <b>{', '.join(words)}</b>.\n"
-                     "Названная тень — уже наполовину обычный страх." + L5_ENTRY)
+                     "Названная тень — уже наполовину обычный страх.")
+        await asyncio.sleep(PAUSE)
+        await m.answer(L5_ENTRY, parse_mode="HTML")
     else:
         await wrong(m, state, "Ровно три разных слова-существительных.",
                     "ровно три различных существительных")
@@ -673,7 +670,9 @@ async def l4_poem(m: Message, state: FSMContext):
         await state.set_data({})
         await reward(m, state, CODES[3],
                      "✅ Тень прочитала катрен и… заплакала светом.\n"
-                     "Твой стих повесят в раме. Слава Хранителя." + L5_ENTRY)
+                     "Твой стих повесят в раме. Слава Хранителя.")
+        await asyncio.sleep(PAUSE)
+        await m.answer(L5_ENTRY, parse_mode="HTML")
     else:
         await wrong(m, state, "Ровно 4 строки, в последней — слово «свет».",
                     "4 строки, последняя содержит слово «свет»")
@@ -723,10 +722,11 @@ async def l5_time(m: Message, state: FSMContext):
         await state.set_data({})
         await reward(m, state, CODES[4],
                      "✅ Отражение вернулось на место — и впервые за много лет\n"
-                     "улыбнулось человеку.\n\n"
-                     "🔥 <b>АРХИВ ГОТОВ К ЗАКРЫТИЮ</b> 🔥\n"
-                     "Введи все пять кодовых слов одной строкой, через пробел,\n"
-                     "в порядке дел 1–5.", parse_mode="HTML")
+                     "улыбнулось человеку.")
+        await asyncio.sleep(PAUSE)
+        await m.answer("🔥 <b>АРХИВ ГОТОВ К ЗАКРЫТИЮ</b> 🔥\n"
+                       "Введи все пять кодовых слов одной строкой, через пробел,\n"
+                       "в порядке дел 1–5.", parse_mode="HTML")
     else:
         await wrong(m, state, "Из 8:30 вычти дорогу, сборы и запас.", "07:10")
 
@@ -743,6 +743,7 @@ async def final(m: Message, state: FSMContext):
             nick, sparks = await cur.fetchone() or ("Ночной Секретарь", 0)
         await state.set_state(Quest.done)
         await m.answer(LORE_FINAL.format(nick=nick), parse_mode="HTML")
+        await asyncio.sleep(PAUSE)
         await m.answer("Отправь сертификат в мини-приложение «Другого Дела» —\n"
                        "там тебе зачтут задание и начислят баллы на почту из реестра.")
         await send_cert(m.from_user.id, nick, sparks)
@@ -872,7 +873,6 @@ async def reset_cmd(m: Message, state: FSMContext):
         await db.execute("""UPDATE players SET level=0, sparks=0, codes='',
                             l3_names='', code_l3=NULL WHERE user_id=?""", (uid,))
         await db.commit()
-    # Сброс FSM-состояния игрока (даже если это не сам админ)
     try:
         key = StorageKey(bot_id=bot.id, chat_id=uid, user_id=uid)
         await dp.storage.set_state(key, state=None)
@@ -942,7 +942,7 @@ async def stale_buttons(c: CallbackQuery):
 # ============================================================
 
 async def main():
-    await init_db()          # ← база и таблица players создаются до первых запросов
+    await init_db()
     asyncio.create_task(reminders())
     print("🕯 Архив открыт. Бот работает.")
     await dp.start_polling(bot)
