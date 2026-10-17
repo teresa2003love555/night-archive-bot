@@ -29,10 +29,23 @@ if not TOKEN:
 
 DB = "quest.db"
 ADMIN_IDS = {1467490182}  # ← впиши свой Telegram user_id (узнать: @userinfobot)
-PAUSE = 1.5               # пауза между сообщениями Хранителя, сек
+PAUSE = 1.5               # пауза между «наградой» и «новым делом», секунды
 
 bot = Bot(TOKEN)
 dp = Dispatcher()
+
+CREATE_PLAYERS = (
+    "CREATE TABLE IF NOT EXISTS players ("
+    "user_id INTEGER PRIMARY KEY,"
+    "nickname TEXT,"
+    "vk_id TEXT,"
+    "email TEXT,"
+    "level INTEGER DEFAULT 0,"
+    "sparks INTEGER DEFAULT 0,"
+    "codes TEXT,"
+    "l3_names TEXT,"
+    "code_l3 TEXT,"
+    "last_seen REAL)")
 
 # ============================================================
 #  ЛОР: тексты Хранителя Архива
@@ -138,7 +151,7 @@ QUIZ_KB = inline_kb(["Марло", "Булгаков", "Гоголь"],
 #  ВАЛИДАЦИЯ РЕГИСТРАЦИИ
 # ============================================================
 
-def parse_vk(text: str) -> str | None:
+def parse_vk(text: str):
     """Принимает id123456, ссылку vk.com/id… или короткое имя."""
     t = (text or "").strip()
     m = re.search(r"(?:vk\.com/|vk\.ru/)?id(\d{4,})", t, re.I)
@@ -153,7 +166,7 @@ def parse_vk(text: str) -> str | None:
 
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
-def parse_email(text: str) -> str | None:
+def parse_email(text: str):
     t = (text or "").strip().lower()
     return t if EMAIL_RE.fullmatch(t) else None
 
@@ -161,21 +174,8 @@ def parse_email(text: str) -> str | None:
 #  БАЗА ДАННЫХ
 # ============================================================
 
-CREATE_PLAYERS = (
-    "CREATE TABLE IF NOT EXISTS players ("
-    "user_id INTEGER PRIMARY KEY,"
-    "nickname TEXT,"
-    "vk_id TEXT,"
-    "email TEXT,"
-    "level INTEGER DEFAULT 0,"
-    "sparks INTEGER DEFAULT 0,"
-    "codes TEXT,"
-    "l3_names TEXT,"
-    "code_l3 TEXT,"
-    "last_seen REAL)")
-
 async def init_db():
-    """Создаёт базу и таблицу игроков при старте — до любого запроса."""
+    """Создаёт базу и таблицу при старте бота — до первого сообщения."""
     async with aiosqlite.connect(DB) as db:
         await db.execute(CREATE_PLAYERS)
         await db.commit()
@@ -190,7 +190,8 @@ async def save(user_id, **fields):
         await db.commit()
 
 class Seen(BaseMiddleware):
-    """Лёгкая версия: один UPDATE на сообщение вместо четырёх запросов."""
+    """Лёгкая версия: один UPDATE на сообщение вместо четырёх запросов.
+    Регистрация игрока происходит в save() во время сценария регистрации."""
     async def __call__(self, handler, event, data):
         try:
             async with aiosqlite.connect(DB) as db:
@@ -235,6 +236,7 @@ async def _grant(state: FSMContext, code: str, user_id: int):
     return sparks
 
 async def reward(m: Message, state: FSMContext, code: str, text: str):
+    """Первое сообщение перехода: похвала за дело + награда."""
     sparks = await _grant(state, code, m.from_user.id)
     await m.answer(f"{text}\n\n🔥 +{sparks} огонька.\n"
                    f"🔑 Кодовое слово уровня: <b>{code}</b> — запомни, без него не зажечь лампу.",
@@ -292,7 +294,7 @@ L4_CHOICE_TEXT = (
     "перестанет быть тенью. Выбери, чем заполнить раму:")
 
 # ============================================================
-#  КОМАНДЫ
+#  КОМАНДЫ (регистрируются ДО игровых обработчиков)
 # ============================================================
 
 @dp.message(Command("start"))
@@ -318,7 +320,12 @@ async def quest_cmd(m: Message, state: FSMContext):
         await start_cmd(m, state)
         return
     lvl = row[0]
-    if lvl <= 1:
+    if lvl == 0:
+        await state.set_state(Quest.riddle)
+        await state.set_data({"r": 0})
+        await m.answer("Дело №1: «Тень на таблицах».\n\n" + RIDDLES[0][0])
+        return
+    if lvl == 1:
         await state.set_state(Quest.riddle)
         await state.set_data({"r": 0})
         await m.answer("Дело №1: «Тень на таблицах».\n\n" + RIDDLES[0][0])
@@ -326,6 +333,9 @@ async def quest_cmd(m: Message, state: FSMContext):
     if lvl == 2:
         await state.set_state(Quest.sort_item)
         await state.set_data({"idx": 0})
+        await m.answer("Тень привела тебя обратно. 🕯 <b>Дело №2: «Мусор, который не призрак»</b>",
+                       parse_mode="HTML")
+        await asyncio.sleep(PAUSE)
         await m.answer(f"Куда отправить: <b>{SORT_ITEMS[0][0]}</b>?",
                        reply_markup=SORT_KB, parse_mode="HTML")
         return
@@ -346,8 +356,13 @@ async def quest_cmd(m: Message, state: FSMContext):
         await state.set_data({})
         await m.answer("Тень привела тебя обратно. " + L5_MAZE_TEXT, parse_mode="HTML")
         return
-    await state.set_state(Quest.done)
-    await m.answer("Архив закрыт. Хранитель тихонько полирует лампу 🕯")
+    if lvl >= 6:
+        await state.set_state(Quest.done)
+        await m.answer("Архив закрыт. Хранитель тихонько полирует лампу 🕯")
+        return
+    await state.set_state(Quest.riddle)
+    await state.set_data({"r": 0})
+    await m.answer("Дело №1: «Тень на таблицах».\n\n" + RIDDLES[0][0])
 
 @dp.message(Command("progress"))
 async def progress_cmd(m: Message):
@@ -442,8 +457,8 @@ async def riddle(m: Message, state: FSMContext):
             await m.answer("🕯 <b>Дело №2: «Мусор, который не призрак»</b>\n"
                            "На чердаке Архива завёлся призрак. Присмотрись: это не призрак —\n"
                            "это пластиковая бутылка 1997 года, которую забыли рассортировать.\n"
-                           "Разберём чердак!\n\n"
-                           "Куда отправить: <b>батарейка</b>?",
+                           "Разберём чердак!", parse_mode="HTML")
+            await m.answer("Куда отправить: <b>батарейка</b>?",
                            reply_markup=SORT_KB, parse_mode="HTML")
     else:
         await wrong(m, state, hint, "ответ: " + ", ".join(sorted(ans)))
@@ -731,69 +746,6 @@ async def l5_time(m: Message, state: FSMContext):
         await wrong(m, state, "Из 8:30 вычти дорогу, сборы и запас.", "07:10")
 
 # ============================================================
-#  ФИНАЛ
-# ============================================================
-
-@dp.message(Quest.final)
-async def final(m: Message, state: FSMContext):
-    if norm(m.text) == norm(" ".join(CODES)):
-        async with aiosqlite.connect(DB) as db:
-            cur = await db.execute(
-                "SELECT nickname, sparks FROM players WHERE user_id=?", (m.from_user.id,))
-            nick, sparks = await cur.fetchone() or ("Ночной Секретарь", 0)
-        await state.set_state(Quest.done)
-        await m.answer(LORE_FINAL.format(nick=nick), parse_mode="HTML")
-        await asyncio.sleep(PAUSE)
-        await m.answer("Отправь сертификат в мини-приложение «Другого Дела» —\n"
-                       "там тебе зачтут задание и начислят баллы на почту из реестра.")
-        await send_cert(m.from_user.id, nick, sparks)
-    else:
-        await wrong(m, state, "Пять слов, по одному с каждого уровня, в порядке дел 1–5.",
-                    "коды уровней в порядке 1–5 через пробел")
-
-@dp.message(Quest.done)
-async def done(m: Message):
-    await m.answer(random.choice([
-        "Архив закрыт. Хранитель полирует лампу и улыбается 🕯",
-        "Тени впервые за год спят спокойно. Спасибо, Секретарь.",
-        "Ты уже всё закрыл. Отдыхай — дело доведено до конца."]))
-
-# ============================================================
-#  СЕРТИФИКАТ
-# ============================================================
-
-def make_cert(uid, nick, sparks):
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.colors import HexColor
-    path = f"cert_{uid}.pdf"
-    c = canvas.Canvas(path, pagesize=(595, 842))
-    c.setFillColor(HexColor("#1a1030")); c.rect(0, 0, 595, 842, fill=1, stroke=0)
-    try:
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
-        pdfmetrics.registerFont(TTFont("DVS", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
-        font = "DVS"
-    except Exception:
-        font = "Times-Roman"
-    c.setFillColor(HexColor("#c9a227"))
-    c.setFont(font, 28); c.drawCentredString(297, 660, "СЕРТИФИКАТ")
-    c.setFont(font, 20); c.drawCentredString(297, 620, "Ночного Секретаря")
-    c.setFillColor(HexColor("#ffffff"))
-    c.setFont(font, 16)
-    c.drawCentredString(297, 520, f"{nick} — {sparks} огоньков")
-    c.drawCentredString(297, 490, "Квест «Другая Сторона Дела»")
-    c.setFont(font, 11)
-    c.drawCentredString(297, 120, "«Дело, доведённое до конца, не боится темноты»")
-    c.save()
-    return path
-
-async def send_cert(uid, nick, sparks):
-    try:
-        await bot.send_document(uid, FSInputFile(make_cert(uid, nick, sparks)))
-    except Exception:
-        await bot.send_message(uid, f"Сертификат Ночного Секретаря: {nick}, {sparks} огоньков 🕯")
-
-# ============================================================
 #  АДМИН-КОМАНДЫ
 # ============================================================
 
@@ -865,6 +817,7 @@ async def reset_cmd(m: Message, state: FSMContext):
         return
     uid = int(parts[1])
     async with aiosqlite.connect(DB) as db:
+        await db.execute(CREATE_PLAYERS)
         cur = await db.execute("SELECT nickname FROM players WHERE user_id=?", (uid,))
         row = await cur.fetchone()
         if not row:
@@ -873,13 +826,15 @@ async def reset_cmd(m: Message, state: FSMContext):
         await db.execute("""UPDATE players SET level=0, sparks=0, codes='',
                             l3_names='', code_l3=NULL WHERE user_id=?""", (uid,))
         await db.commit()
+    # Сброс FSM-состояния игрока (даже если это не сам админ)
     try:
         key = StorageKey(bot_id=bot.id, chat_id=uid, user_id=uid)
         await dp.storage.set_state(key, state=None)
         await dp.storage.set_data(key, {})
     except Exception:
         pass
-    await m.answer(f"Прогресс «{row[0]}» стёрт. Архив забыл — и снова ждёт.")
+    await m.answer(f"Прогресс «{row[0]}» стёрт. Архив забыл — и снова ждёт.\n"
+                   "Напиши /start — двери откроются заново.")
 
 @dp.message(Command("broadcast"))
 async def broadcast_cmd(m: Message):
@@ -902,6 +857,69 @@ async def broadcast_cmd(m: Message):
             pass
         await asyncio.sleep(0.05)
     await m.answer(f"📢 Объявление доставлено: {sent} из {len(ids)} Секретарей.")
+
+# ============================================================
+#  ФИНАЛ
+# ============================================================
+
+@dp.message(Quest.final)
+async def final(m: Message, state: FSMContext):
+    if norm(m.text) == norm(" ".join(CODES)):
+        async with aiosqlite.connect(DB) as db:
+            cur = await db.execute(
+                "SELECT nickname, sparks FROM players WHERE user_id=?", (m.from_user.id,))
+            nick, sparks = await cur.fetchone() or ("Ночной Секретарь", 0)
+        await state.set_state(Quest.done)
+        await m.answer(LORE_FINAL.format(nick=nick), parse_mode="HTML")
+        await asyncio.sleep(PAUSE)
+        await m.answer("Отправь сертификат в мини-приложение «Другого Дела» —\n"
+                       "там тебе зачтут задание и начислят баллы на почту из реестра.")
+        await send_cert(m.from_user.id, nick, sparks)
+    else:
+        await wrong(m, state, "Пять слов, по одному с каждого уровня, в порядке дел 1–5.",
+                    "коды уровней в порядке 1–5 через пробел")
+
+@dp.message(Quest.done)
+async def done(m: Message):
+    await m.answer(random.choice([
+        "Архив закрыт. Хранитель полирует лампу и улыбается 🕯",
+        "Тени впервые за год спят спокойно. Спасибо, Секретарь.",
+        "Ты уже всё закрыл. Отдыхай — дело доведено до конца."]))
+
+# ============================================================
+#  СЕРТИФИКАТ
+# ============================================================
+
+def make_cert(uid, nick, sparks):
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.colors import HexColor
+    path = f"cert_{uid}.pdf"
+    c = canvas.Canvas(path, pagesize=(595, 842))
+    c.setFillColor(HexColor("#1a1030")); c.rect(0, 0, 595, 842, fill=1, stroke=0)
+    try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        pdfmetrics.registerFont(TTFont("DVS", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
+        font = "DVS"
+    except Exception:
+        font = "Times-Roman"
+    c.setFillColor(HexColor("#c9a227"))
+    c.setFont(font, 28); c.drawCentredString(297, 660, "СЕРТИФИКАТ")
+    c.setFont(font, 20); c.drawCentredString(297, 620, "Ночного Секретаря")
+    c.setFillColor(HexColor("#ffffff"))
+    c.setFont(font, 16)
+    c.drawCentredString(297, 520, f"{nick} — {sparks} огоньков")
+    c.drawCentredString(297, 490, "Квест «Другая Сторона Дела»")
+    c.setFont(font, 11)
+    c.drawCentredString(297, 120, "«Дело, доведённое до конца, не боится темноты»")
+    c.save()
+    return path
+
+async def send_cert(uid, nick, sparks):
+    try:
+        await bot.send_document(uid, FSInputFile(make_cert(uid, nick, sparks)))
+    except Exception:
+        await bot.send_message(uid, f"Сертификат Ночного Секретаря: {nick}, {sparks} огоньков 🕯")
 
 # ============================================================
 #  НАПОМИНАНИЯ
