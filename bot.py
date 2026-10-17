@@ -137,7 +137,7 @@ QUIZ_KB = inline_kb(["Марло", "Булгаков", "Гоголь"],
 #  ВАЛИДАЦИЯ РЕГИСТРАЦИИ
 # ============================================================
 
-def parse_vk(text: str) -> str | None:
+def parse_vk(text: str):
     """Принимает id123456, ссылку vk.com/id… или короткое имя."""
     t = (text or "").strip()
     m = re.search(r"(?:vk\.com/|vk\.ru/)?id(\d{4,})", t, re.I)
@@ -152,7 +152,7 @@ def parse_vk(text: str) -> str | None:
 
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
-def parse_email(text: str) -> str | None:
+def parse_email(text: str):
     t = (text or "").strip().lower()
     return t if EMAIL_RE.fullmatch(t) else None
 
@@ -160,19 +160,29 @@ def parse_email(text: str) -> str | None:
 #  БАЗА ДАННЫХ
 # ============================================================
 
+CREATE_PLAYERS = (
+    "CREATE TABLE IF NOT EXISTS players ("
+    "user_id INTEGER PRIMARY KEY,"
+    "nickname TEXT,"
+    "vk_id TEXT,"
+    "email TEXT,"
+    "level INTEGER DEFAULT 0,"
+    "sparks INTEGER DEFAULT 0,"
+    "codes TEXT,"
+    "l3_names TEXT,"
+    "code_l3 TEXT,"
+    "last_seen REAL)")
+
+async def init_db():
+    """Создаёт базу и таблицу при старте бота — чтобы первый же запрос
+    к players не падал на пустой базе нового хостинга."""
+    async with aiosqlite.connect(DB) as db:
+        await db.execute(CREATE_PLAYERS)
+        await db.commit()
+
 async def save(user_id, **fields):
     async with aiosqlite.connect(DB) as db:
-        await db.execute("CREATE TABLE IF NOT EXISTS players ("
-                         "user_id INTEGER PRIMARY KEY,"
-                         "nickname TEXT,"
-                         "vk_id TEXT,"
-                         "email TEXT,"
-                         "level INTEGER DEFAULT 0,"
-                         "sparks INTEGER DEFAULT 0,"
-                         "codes TEXT,"
-                         "l3_names TEXT,"
-                         "code_l3 TEXT,"
-                         "last_seen REAL)")
+        await db.execute(CREATE_PLAYERS)
         await db.execute("INSERT OR IGNORE INTO players(user_id) VALUES(?)", (user_id,))
         for k, v in fields.items():
             await db.execute(f"UPDATE players SET {k}=? WHERE user_id=?", (v, user_id))
@@ -644,7 +654,7 @@ async def quiz_wrong(c: CallbackQuery):
 async def l4_best(m: Message, state: FSMContext):
     words = re.findall(r"[а-яёА-ЯЁa-zA-Z]+", m.text or "")
     if len(words) == 3 and len(set(map(str.lower, words))) == 3:
-        await save(m.from_user.id, level=5)
+        await save(m.from_user.id, level=5, l3_names=", ".join(words))
         await state.set_state(Quest.l5_maze)
         await state.set_data({})
         await reward(m, state, CODES[3],
@@ -932,6 +942,7 @@ async def stale_buttons(c: CallbackQuery):
 # ============================================================
 
 async def main():
+    await init_db()          # ← база и таблица players создаются до первых запросов
     asyncio.create_task(reminders())
     print("🕯 Архив открыт. Бот работает.")
     await dp.start_polling(bot)
