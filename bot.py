@@ -958,7 +958,7 @@ async def l5_time(m: Message, state: FSMContext):
                      "улыбнулось человеку.\n\n"
                      "🔥 <b>АРХИВ ГОТОВ К ЗАКРЫТИЮ</b> 🔥")
         await asyncio.sleep(PAUSE)
-        await send_stage(m, None, TRANS_FINAL,
+        await send_stage(m, "img_cert_bg.png", TRANS_FINAL,
                          "Введи все пять кодовых слов одной строкой, через пробел,\n"
                          "в порядке дел 1–5.")
     else:
