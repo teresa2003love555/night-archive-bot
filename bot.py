@@ -56,7 +56,7 @@ LORE_INTRO = (
 LORE_REG = (
     "Прежде чем впустить тебя, Хранитель обязан занести тебя в книгу.\n\n"
     "📜 <b>Страница реестра</b>\n"
-    "Имя и фамилия — под ними Тени будут звать тебя.\n"
+    "Фамилия и имя — под ними Тени будут звать тебя.\n"
     "Отметка ВКонтакте — чтобы Архив знал, где ты живёшь среди живых.\n"
     "Почта — туда «Другое Дело» начислит баллы за закрытые дела."
 )
@@ -92,9 +92,9 @@ RIDDLES = [
      {"дедлайн", "deadline"}, "Три из них — источники знаний. Один — источник паники."),
     ("Третий вопрос:\n«Прочитай слово наоборот: ТЕНЬ».",
      {"ьнет"}, "Слово из четырёх букв. Просто разверни."),
-    ("Четвёртый вопрос — шифр:\n«ЙДЬС НЕМЕ» — это анаграмма фразы,\n"
+    ("Четвёртый вопрос — шифр:\n«АТЬЯСЕР НЕД» — это анаграмма фразы,\n"
      "которой Хранитель закрывает дела. Расшифруй.",
-     {"семьдней", "7дней" }, "Сколько ночей длится Хэллоуинская неделя? Посчитай перестановки,пиши с Заглавной буквы."),
+     {"семьдней", "7дней"}, "Сколько ночей длится Хэллоуинская неделя? Посчитай перестановки."),
 ]
 
 SORT_ITEMS = [
@@ -135,29 +135,18 @@ QUIZ_KB = inline_kb(["Марло", "Булгаков", "Гоголь"],
                     ["q_marlo", "q_bulgakov", "q_gogol"])
 
 # ============================================================
-#  КАРТИНКИ КВЕСТА
+#  ВАЛИДАЦИЯ
 # ============================================================
 
-IMG_INTRO = "img_intro.png"
-IMG_TASKS = {1: "img_task1.png", 2: "img_task2.png", 3: "img_task3.png",
-             4: "img_task4.png", 5: "img_task5.png"}
-IMG_FINAL = "img_final.png"
+NAME_RE = re.compile(r"^[А-ЯЁ][а-яё\-]{1,}$")
 
-async def send_img(chat_id: int, fname: str):
-    """Шлёт иллюстрацию, если файл есть. Нет файла — молча пропускаем."""
-    try:
-        await bot.send_photo(chat_id, FSInputFile(fname))
-    except Exception:
-        pass
-
-# ============================================================
-#  ВАЛИДАЦИЯ РЕГИСТРАЦИИ
-# ============================================================
-
-def valid_rus_name(t: str) -> bool:
-    """Русское слово с заглавной: Иван, Мария-Анна, Дюма."""
-    return bool(re.fullmatch(r"[А-ЯЁ][а-яё]+(?:[-\s][А-ЯЁ][а-яё]+)*",
-                             (t or "").strip()))
+def parse_name(text: str):
+    """Имя/фамилия: по-русски, с заглавной, можно через дефис."""
+    t = (text or "").strip()
+    t = re.sub(r"\s+", " ", t)
+    if NAME_RE.fullmatch(t):
+        return t
+    return None
 
 def parse_vk(text: str):
     """Принимает id123456, ссылку vk.com/id… или короткое имя."""
@@ -211,8 +200,7 @@ async def save(user_id, **fields):
         await db.commit()
 
 class Seen(BaseMiddleware):
-    """Лёгкая версия: один UPDATE на сообщение вместо четырёх запросов.
-    Регистрация игрока происходит в save() во время сценария регистрации."""
+    """Лёгкая версия: один UPDATE на сообщение вместо четырёх запросов."""
     async def __call__(self, handler, event, data):
         try:
             async with aiosqlite.connect(DB) as db:
@@ -228,6 +216,20 @@ dp.message.middleware(Seen())
 # ============================================================
 #  ИГРОВЫЕ МЕХАНИКИ
 # ============================================================
+
+async def send_img(chat: Message, fname: str, caption: str | None = None) -> bool:
+    """Шлёт картинку из корня репозитория, если файл существует.
+    Возвращает True, если картинка реально отправлена."""
+    if os.path.exists(fname):
+        try:
+            if caption:
+                await chat.answer_photo(FSInputFile(fname), caption=caption, parse_mode="HTML")
+            else:
+                await chat.answer_photo(FSInputFile(fname))
+            return True
+        except Exception:
+            pass  # картинка не критична — текст дойдёт и без неё
+    return False
 
 async def wrong(m: Message, state: FSMContext, hint: str, reveal: str):
     d = await state.get_data()
@@ -274,8 +276,8 @@ async def reward_c(c: CallbackQuery, state: FSMContext, code: str, text: str):
 # ============================================================
 
 class Quest(StatesGroup):
-    intro = State()
-    surname = State()
+    intro = State()       # имя
+    surname = State()     # фамилия
     vk_id = State()
     email = State()
     riddle = State()
@@ -313,71 +315,83 @@ L3_CHOICE_TEXT = (
 L4_CHOICE_TEXT = (
     "🕯 <b>Дело №4: «Портрет в скетчбуке»</b>\n"
     "В Архиве стоит мольберт с пустым холстом. Тень, которую коснётся\n"
-    "картина, перестанет быть тенью. Выбери, чем заполнить полотно:")
+    "картина, перестанет быть тенью. Выбери, чем заполнить холст:")
 
 # ============================================================
 #  КОМАНДЫ
+#  ВАЖНО: start_cmd и quest_cmd НЕ вызывают друг друга —
+#  иначе при расхождении проверок возможна взаимная рекурсия
+#  (start → quest → start → …), которая вешала бота.
 # ============================================================
 
-@dp.message(Command("start"))
-async def start_cmd(m: Message, state: FSMContext):
+async def get_player(user_id: int):
     async with aiosqlite.connect(DB) as db:
         cur = await db.execute(
-            "SELECT nickname, vk_id, email FROM players WHERE user_id=?", (m.from_user.id,))
-        row = await cur.fetchone()
-    if row and row[0] and row[1] and row[2]:
-        await quest_cmd(m, state)
-        return
+            "SELECT level, nickname, vk_id, email FROM players WHERE user_id=?", (user_id,))
+        return await cur.fetchone()
+
+async def begin_registration(m: Message, state: FSMContext):
+    """Единая точка входа в регистрацию (без взаимных вызовов)."""
     await state.set_state(Quest.intro)
-    await send_img(m.from_user.id, IMG_INTRO)
+    await state.set_data({})
     await m.answer(LORE_INTRO, parse_mode="HTML")
+    await send_img(m, "img_intro.png")
     await m.answer("Назови своё имя, Ночной Секретарь.")
 
-@dp.message(Command("quest"))
-async def quest_cmd(m: Message, state: FSMContext):
-    async with aiosqlite.connect(DB) as db:
-        cur = await db.execute(
-            "SELECT level FROM players WHERE user_id=?", (m.from_user.id,))
-        row = await cur.fetchone()
-    if not row or not (row[0] if row else 0):
-        await start_cmd(m, state)
-        return
+async def continue_quest(m: Message, state: FSMContext, row):
+    """Продолжение квеста по уровню. row = (level, nickname, vk_id, email)."""
     lvl = row[0]
     if lvl <= 1:
         await state.set_state(Quest.riddle)
         await state.set_data({"r": 0})
-        await send_img(m.from_user.id, IMG_TASKS[1])
+        await send_img(m, "img_task1.png")
         await m.answer("Дело №1: «Тень на таблицах».\n\n" + RIDDLES[0][0])
         return
     if lvl == 2:
         await state.set_state(Quest.sort_item)
         await state.set_data({"idx": 0})
-        await send_img(m.from_user.id, IMG_TASKS[2])
+        await send_img(m, "img_task2.png")
         await m.answer(f"Куда отправить: <b>{SORT_ITEMS[0][0]}</b>?",
                        reply_markup=SORT_KB, parse_mode="HTML")
         return
     if lvl == 3:
         await state.set_state(Quest.l3_choice)
         await state.set_data({})
-        await send_img(m.from_user.id, IMG_TASKS[3])
+        await send_img(m, "img_task3.png")
         await m.answer("Тень привела тебя обратно. " + L3_CHOICE_TEXT,
                        reply_markup=L3_KB, parse_mode="HTML")
         return
     if lvl == 4:
         await state.set_state(Quest.l4_choice)
         await state.set_data({})
-        await send_img(m.from_user.id, IMG_TASKS[4])
+        await send_img(m, "img_task4.png")
         await m.answer("Тень привела тебя обратно. " + L4_CHOICE_TEXT,
                        reply_markup=L4_KB, parse_mode="HTML")
         return
     if lvl == 5:
         await state.set_state(Quest.l5_maze)
         await state.set_data({})
-        await send_img(m.from_user.id, IMG_TASKS[5])
+        await send_img(m, "img_task5.png")
         await m.answer("Тень привела тебя обратно. " + L5_MAZE_TEXT, parse_mode="HTML")
         return
     await state.set_state(Quest.done)
     await m.answer("Архив закрыт. Хранитель тихонько полирует лампу 🕯")
+
+@dp.message(Command("start"))
+async def start_cmd(m: Message, state: FSMContext):
+    row = await get_player(m.from_user.id)
+    if row and row[1] and row[2] and row[3]:
+        await continue_quest(m, state, row)
+        return
+    await begin_registration(m, state)
+
+@dp.message(Command("quest"))
+async def quest_cmd(m: Message, state: FSMContext):
+    row = await get_player(m.from_user.id)
+    if not row or not (row[1] and row[2] and row[3]):
+        await begin_registration(m, state)
+        return
+    await continue_quest(m, state, row)
 
 @dp.message(Command("progress"))
 async def progress_cmd(m: Message):
@@ -403,28 +417,30 @@ async def progress_cmd(m: Message):
 
 @dp.message(Quest.intro)
 async def intro(m: Message, state: FSMContext):
-    name = (m.text or "").strip().title()
-    if not valid_rus_name(name):
-        await m.answer("Имя должно быть по-русски и с большой буквы.\n"
-                       "Перепиши его пером, как в древних книгах.")
+    name = parse_name(m.text)
+    if not name:
+        await m.answer("Имя должно быть по-русски и с заглавной буквы —\n"
+                       "под ним Тени будут звать тебя. Попробуй ещё раз.")
         return
-    await state.update_data(name=name)
+    await state.update_data(first_name=name)
     await state.set_state(Quest.surname)
-    await m.answer("Имя записано. Теперь фамилия — книга Архива требует её без пропусков.")
+    await m.answer(f"Приятно, {name}. Теперь фамилия — Архив записывает\n"
+                   "Секретарей полным именем.")
 
 @dp.message(Quest.surname)
 async def surname_input(m: Message, state: FSMContext):
-    surname = (m.text or "").strip().title()
-    if not valid_rus_name(surname):
-        await m.answer("Фамилия должна быть по-русски и с большой буквы.\n"
-                       "Перепиши её пером, как в древних книгах.")
+    surname = parse_name(m.text)
+    if not surname:
+        await m.answer("Фамилия должна быть по-русски и с заглавной буквы. Попробуй ещё раз.")
         return
     d = await state.get_data()
-    full = f"{surname} {d.get('name', '')}".strip()
-    await save(m.from_user.id, nickname=full)
+    full_name = f"{surname} {d.get('first_name', '')}".strip()
+    await save(m.from_user.id, nickname=full_name)
     await state.set_state(Quest.vk_id)
     await m.answer(LORE_REG, parse_mode="HTML")
-    await m.answer("Оставь отметку ВКонтакте:\nссылку (vk.com/…), ID (например id123456789) или короткое имя страницы.")
+    await m.answer(f"Секретарь <b>{full_name}</b> — записан пером и лунным светом.\n\n"
+                   "Оставь отметку ВКонтакте:\nссылку (vk.com/…), ID (например id123456789) "
+                   "или короткое имя страницы.", parse_mode="HTML")
 
 @dp.message(Quest.vk_id)
 async def vk_input(m: Message, state: FSMContext):
@@ -463,7 +479,7 @@ async def email_input(m: Message, state: FSMContext):
     await state.set_data({"r": 0})
     await m.answer("✅ Реестр подписан. Двери Архива скрипят и открываются…")
     await asyncio.sleep(PAUSE)
-    await send_img(m.from_user.id, IMG_TASKS[1])
+    await send_img(m, "img_task1.png")
     await m.answer("🕯 <b>Дело №1: «Тень на таблицах»</b>\n"
                    "Один студент оставил незакрытый конспект — и теперь цифры шепчут по ночам.\n\n"
                    + RIDDLES[0][0], parse_mode="HTML")
@@ -488,7 +504,7 @@ async def riddle(m: Message, state: FSMContext):
             await reward(m, state, CODES[0],
                          "✅ Конспект закрыт. Цифры замолчали — по крайней мере, до сессии.")
             await asyncio.sleep(PAUSE)
-            await send_img(m.from_user.id, IMG_TASKS[2])
+            await send_img(m, "img_task2.png")
             await m.answer("🕯 <b>Дело №2: «Мусор, который не призрак»</b>\n"
                            "На чердаке Архива завёлся призрак. Присмотрись: это не призрак —\n"
                            "это пластиковая бутылка 1997 года, которую забыли рассортировать.\n"
@@ -568,7 +584,7 @@ async def bonus_ok(c: CallbackQuery, state: FSMContext):
                    "✅ Призрак рассортирован и наконец успокоился. Мусор, рассортированный вовремя,\n"
                    "не призрак, а ресурс.")
     await asyncio.sleep(PAUSE)
-    await send_img(c.from_user.id, IMG_TASKS[3])
+    await send_img(c.message, "img_task3.png")
     await c.message.answer(L3_CHOICE_TEXT, reply_markup=L3_KB, parse_mode="HTML")
 
 @dp.callback_query(Quest.sort_bonus_q)
@@ -616,7 +632,7 @@ async def l3_secret(m: Message, state: FSMContext):
                      "✅ Шифр разгадан — страница переписана набело, и дело получило имя.\n"
                      "Добро, сделанное ночью, светит вдвойне.")
         await asyncio.sleep(PAUSE)
-        await send_img(m.from_user.id, IMG_TASKS[4])
+        await send_img(m, "img_task4.png")
         await m.answer(L4_CHOICE_TEXT, reply_markup=L4_KB, parse_mode="HTML")
     else:
         await wrong(m, state,
@@ -634,7 +650,7 @@ async def l3_call(m: Message, state: FSMContext):
                      f"✅ История услышана — Тень улыбнулась. Год {digits} занесён в книгу Архива.\n"
                      "Такие разговоры, пока звучат, не дают Теням расти.")
         await asyncio.sleep(PAUSE)
-        await send_img(m.from_user.id, IMG_TASKS[4])
+        await send_img(m, "img_task4.png")
         await m.answer(L4_CHOICE_TEXT, reply_markup=L4_KB, parse_mode="HTML")
     else:
         await wrong(m, state, "Нужен год первого класса — четыре цифры от 1900 до 2020.",
@@ -692,7 +708,7 @@ async def quiz_ok(c: CallbackQuery, state: FSMContext):
                    "✅ Кристофер Марло — современник Шекспира. Фауст, продавший душу,\n"
                    "в Архиве числится с 1588 года.")
     await asyncio.sleep(PAUSE)
-    await send_img(c.from_user.id, IMG_TASKS[5])
+    await send_img(c.message, "img_task5.png")
     await c.message.answer("🕯 <b>Дело №5: «Зеркало без отражения»</b>\n" + L5_MAZE_TEXT,
                            parse_mode="HTML")
 
@@ -712,7 +728,7 @@ async def l4_best(m: Message, state: FSMContext):
                      f"✅ Твоя Тень занесена в Бестиарий: <b>{', '.join(words)}</b>.\n"
                      "Названная тень — уже наполовину обычный страх.")
         await asyncio.sleep(PAUSE)
-        await send_img(m.from_user.id, IMG_TASKS[5])
+        await send_img(m, "img_task5.png")
         await m.answer("🕯 <b>Дело №5: «Зеркало без отражения»</b>\n" + L5_MAZE_TEXT,
                        parse_mode="HTML")
     else:
@@ -730,7 +746,7 @@ async def l4_poem(m: Message, state: FSMContext):
                      "✅ Тень прочитала катрен и… заплакала светом.\n"
                      "Твой стих повесят в раме. Слава Хранителя.")
         await asyncio.sleep(PAUSE)
-        await send_img(m.from_user.id, IMG_TASKS[5])
+        await send_img(m, "img_task5.png")
         await m.answer("🕯 <b>Дело №5: «Зеркало без отражения»</b>\n" + L5_MAZE_TEXT,
                        parse_mode="HTML")
     else:
@@ -785,7 +801,6 @@ async def l5_time(m: Message, state: FSMContext):
                      "улыбнулось человеку.\n\n"
                      "🔥 <b>АРХИВ ГОТОВ К ЗАКРЫТИЮ</b> 🔥")
         await asyncio.sleep(PAUSE)
-        await send_img(m.from_user.id, IMG_FINAL)
         await m.answer("Введи все пять кодовых слов одной строкой, через пробел,\n"
                        "в порядке дел 1–5.")
     else:
@@ -847,7 +862,7 @@ async def export_cmd(m: Message):
         rows = await cur.fetchall()
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f, delimiter=";")
-        w.writerow(["Telegram ID", "Имя Фамилия", "VK", "Почта", "Дело №", "Огоньки", "Коды"])
+        w.writerow(["Telegram ID", "Фамилия Имя", "VK", "Почта", "Дело №", "Огоньки", "Коды"])
         for uid, nick, vk, email, lvl, sparks, codes in rows:
             w.writerow([uid, nick, vk or "", email or "", max(lvl, 1),
                         sparks, (codes or "").replace(";", ", ")])
@@ -873,6 +888,7 @@ async def reset_cmd(m: Message, state: FSMContext):
         await db.execute("""UPDATE players SET level=0, sparks=0, codes='',
                             l3_names='', code_l3=NULL WHERE user_id=?""", (uid,))
         await db.commit()
+    # Сброс FSM-состояния игрока (даже если это не сам админ)
     try:
         key = StorageKey(bot_id=bot.id, chat_id=uid, user_id=uid)
         await dp.storage.set_state(key, state=None)
@@ -905,8 +921,16 @@ async def broadcast_cmd(m: Message):
     await m.answer(f"📢 Объявление доставлено: {sent} из {len(ids)} Секретарей.")
 
 # ============================================================
-#  ФИНАЛ
+#  ФИНАЛ: итоговое сообщение с фото (сертификата больше нет)
 # ============================================================
+
+FINAL_CAPTION = (
+    "🔦 <b>Сертификат Ночного Секретаря</b>\n\n"
+    "{nick}\n"
+    "Все пять дел закрыты. {sparks} огоньков собрано.\n\n"
+    "Отправь это сообщение в мини-приложение «Другого Дела» —\n"
+    "там тебе зачтут задание и начислят баллы на почту из реестра.\n\n"
+    "«Дело, доведённое до конца, не боится темноты».")
 
 @dp.message(Quest.final)
 async def final(m: Message, state: FSMContext):
@@ -917,7 +941,6 @@ async def final(m: Message, state: FSMContext):
     nick, sparks, code_l3 = row if row else ("Ночной Секретарь", 0, None)
     expected = norm(" ".join(CODES))
     said = norm(m.text)
-    # Страховка для старых записей: третий код мог сохраниться как год звонка
     ok = said == expected
     if not ok and code_l3:
         alt = norm(" ".join(CODES[:2] + [str(code_l3)] + CODES[3:]))
@@ -925,9 +948,9 @@ async def final(m: Message, state: FSMContext):
     if ok:
         await state.set_state(Quest.done)
         await m.answer(LORE_FINAL.format(nick=nick), parse_mode="HTML")
-        await m.answer("Отправь фото в коментарии сообщества Актива —\n"
-                       "там тебе зачтут задание и начислят баллы на почту из реестра.")
-        await send_cert(m.from_user.id, nick, sparks)
+        await asyncio.sleep(PAUSE)
+        if not await send_img(m, "img_final.png", caption=FINAL_CAPTION.format(nick=nick, sparks=sparks)):
+            await m.answer(FINAL_CAPTION.format(nick=nick, sparks=sparks), parse_mode="HTML")
     else:
         await wrong(m, state, "Пять слов, по одному с каждого уровня, в порядке дел 1–5.",
                     "коды уровней в порядке 1–5 через пробел")
@@ -938,121 +961,6 @@ async def done(m: Message):
         "Архив закрыт. Хранитель полирует лампу и улыбается 🕯",
         "Тени впервые за год спят спокойно. Спасибо, Секретарь.",
         "Ты уже всё закрыл. Отдыхай — дело доведено до конца."]))
-
-# ============================================================
-#  СЕРТИФИКАТ (фон-картинка + рамка, без кодовых слов)
-# ============================================================
-
-def _register_fonts():
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    try:
-        pdfmetrics.registerFont(TTFont(
-            "DVS", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
-        pdfmetrics.registerFont(TTFont(
-            "DVS-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"))
-        return "DVS", "DVS-Bold"
-    except Exception:
-        return "Helvetica", "Helvetica-Bold"
-
-def make_cert(uid, nick, sparks):
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.colors import HexColor
-    from datetime import date
-    months = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
-              "августа", "сентября", "октября", "ноября", "декабря"]
-    t = date.today()
-    date_str = f"{t.day} {months[t.month-1]} {t.year}"
-    path = f"cert_{uid}.pdf"
-    PW, PH = 595, 842
-    GOLD = HexColor("#d9a441")
-    CREAM = HexColor("#f3e9d2")
-    c = canvas.Canvas(path, pagesize=(PW, PH))
-    # Фон: картинка Архива с Мией; нет файла — тёмная заливка
-    try:
-        c.drawImage("img_cert_bg.png", 0, 0, PW, PH,
-                    preserveAspectRatio=True, anchor='c', mask='auto')
-    except Exception:
-        c.setFillColor(HexColor("#1a1030"))
-        c.rect(0, 0, PW, PH, fill=1, stroke=0)
-    # Затемнение верхней зоны под текст
-    c.setFillColor(HexColor("#0c0720"))
-    c.setFillAlpha(0.28)
-    c.rect(0, PH - 340, PW, 340, fill=1, stroke=0)
-    c.setFillAlpha(1)
-    # Двойная золотая рамка с ромбами по углам
-    c.setStrokeColor(GOLD)
-    c.setLineWidth(3)
-    c.rect(28, 28, PW - 56, PH - 56)
-    c.setLineWidth(1)
-    c.rect(38, 38, PW - 76, PH - 76)
-
-    def diamond(x, y, r=7):
-        c.setFillColor(GOLD)
-        p = c.beginPath()
-        p.moveTo(x, y + r); p.lineTo(x + r, y)
-        p.lineTo(x, y - r); p.lineTo(x - r, y); p.close()
-        c.drawPath(p, fill=1, stroke=0)
-
-    for x, y in [(28, 28), (PW - 28, 28), (28, PH - 28), (PW - 28, PH - 28),
-                 (38, 38), (PW - 38, 38), (38, PH - 38), (PW - 38, PH - 38)]:
-        diamond(x, y)
-
-    font, font_b = _register_fonts()
-    c.setFillColor(GOLD)
-    c.setFont(font_b, 34)
-    c.drawCentredString(PW / 2, PH - 120, "СЕРТИФИКАТ")
-    c.setFont(font, 20)
-    c.drawCentredString(PW / 2, PH - 152, "Ночного Секретаря")
-    c.setLineWidth(1.4)
-    c.line(PW / 2 - 130, PH - 170, PW / 2 + 130, PH - 170)
-    diamond(PW / 2, PH - 170, 5)
-    c.setFillColor(CREAM)
-    c.setFont(font_b, 26)
-    c.drawCentredString(PW / 2, PH - 240, nick)
-    c.setStrokeColor(GOLD)
-    c.setLineWidth(1)
-    c.line(PW / 2 - 150, PH - 256, PW / 2 + 150, PH - 256)
-    c.setFillColor(HexColor("#cfc4a8"))
-    c.setFont(font, 12)
-    c.drawCentredString(PW / 2, PH - 276, "довел(а) все дела Архива до конца")
-    # Пять огоньков (без слов — ответы не светятся)
-    n, span = 5, 60
-    x0 = PW / 2 - span * (n - 1) / 2
-    y0 = PH - 420
-    c.setFillColor(HexColor("#ffb347"))
-    c.setStrokeColor(GOLD)
-    c.setLineWidth(1.2)
-    for i in range(n):
-        cx = x0 + i * span
-        c.circle(cx, y0, 16, fill=0, stroke=1)
-        p = c.beginPath()
-        p.moveTo(cx, y0 + 12)
-        p.curveTo(cx + 8, y0 + 4, cx + 7, y0 - 8, cx, y0 - 11)
-        p.curveTo(cx - 7, y0 - 8, cx - 8, y0 + 4, cx, y0 + 12)
-        p.close()
-        c.drawPath(p, fill=1, stroke=0)
-    c.setFillColor(CREAM)
-    c.setFont(font, 13)
-    c.drawCentredString(PW / 2, y0 - 40, f"{sparks} огоньков за закрытые дела")
-    c.setFont(font, 12)
-    c.drawCentredString(PW / 2, y0 - 66, "квест «Другая Сторона Дела» — проект «Другое Дело»")
-    c.setFillColor(HexColor("#cfc4a8"))
-    c.setFont(font, 12)
-    c.drawCentredString(PW / 2, 150, "Хранитель Архива Ночных Дел")
-    c.setFont(font, 11)
-    c.drawCentredString(PW / 2, 128, date_str)
-    c.setFillColor(GOLD)
-    c.setFont(font, 11)
-    c.drawCentredString(PW / 2, 70, "«Дело, доведённое до конца, не боится темноты»")
-    c.save()
-    return path
-
-async def send_cert(uid, nick, sparks):
-    try:
-        await bot.send_document(uid, FSInputFile(make_cert(uid, nick, sparks)))
-    except Exception:
-        await bot.send_message(uid, f"Сертификат Ночного Секретаря: {nick}, {sparks} огоньков 🕯")
 
 # ============================================================
 #  НАПОМИНАНИЯ
