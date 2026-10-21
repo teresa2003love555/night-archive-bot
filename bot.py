@@ -29,7 +29,12 @@ if not TOKEN:
 DB = "quest.db"
 ADMIN_IDS = {1467490182}  # ← впиши свой Telegram user_id (узнать: @userinfobot)
 
-PAUSE = 1.5  # пауза между «наградой» и «новым делом», секунды
+PAUSE = 1.5   # пауза между «наградой» и переходом к новому делу, секунды
+STAGE_GAP = 5 # пауза между лором (с картинкой) и заданием, секунды
+
+# Ссылка на одностраничный сайт с тайным заданием (дело №3).
+# После включения GitHub Pages сверь адрес с реальным.
+SITE_URL = "https://teresa2003love555.github.io/night-archive-bot/"
 
 bot = Bot(TOKEN)
 dp = Dispatcher()
@@ -46,9 +51,12 @@ LORE_INTRO = (
     "тёплые слова, недорисованные наброски и так ни разу и не сделанные\n"
     "приседания. Каждое незакрытое дело рождает <b>Тень</b> — и Тени\n"
     "просыпаются к Хэллоуину.\n\n"
-    "В эту ночь тебе выпадет должность Ночного Секретаря. Пять дел,\n"
-    "пять кодовых слов, пять огоньков. Собери их — и зажги лампу,\n"
-    "чтобы закрыть Архив навсегда.\n\n"
+    "Последняя Хранительница Архива — <b>Мия</b>. Она приходит сюда в\n"
+    "кремовом свитере, со свечой в руке: зажигает лампу под потолком,\n"
+    "поправляет стеллажи и следит, чтобы Тени не разбрелись по живым.\n\n"
+    "Сегодня Мия передаёт лампу тебе: в эту ночь ты станешь Ночным\n"
+    "Секретарём. Пять дел, пять кодовых слов, пять огоньков. Собери их —\n"
+    "и зажги лампу, чтобы закрыть Архив навсегда.\n\n"
     "«Дело, доведённое до конца, не боится темноты»."
 )
 
@@ -63,8 +71,9 @@ LORE_REG = (
 
 LORE_FINAL = (
     "🔦 <b>ЛАМПА ЗАЖГЛАСЬ</b>\n\n"
-    "Пять огоньков слились в один ровный свет. Тени поклонились —\n"
-    "и растаяли, как чернила, наконец высохшие на бумаге.\n\n"
+    "Пять огоньков слились в один ровный свет. Мия поднимает лампу —\n"
+    "и Тени поклонились и растаяли, как чернила, наконец высохшие\n"
+    "на бумаге.\n\n"
     "Архив закрыт. Ни одного незавершённого дела не осталось в этих\n"
     "стенах. А это значит — у каждой Тени теперь есть шанс стать\n"
     "не тенью, а делом.\n\n"
@@ -76,6 +85,67 @@ LORE_PLEDGE = (
     "Один Секретарь ушёл, не закончив дело, — и теперь он бродит\n"
     "по снам участников квеста, шепчет: «доведи до конца…».\n"
     "Не будь как он. Закрой все пять дел."
+)
+
+# --- Переходы между делами (отправляются одним сообщением с картинкой) ---
+
+TRANS_1 = (
+    "Мия зажигает свечу и ведёт тебя мимо стеллажей, где шепчут конспекты.\n"
+    "«Первое дело почти всегда про учёбу, — говорит она. — Брошенный\n"
+    "конспект шумит громче всех».\n\n"
+    "🕯 <b>Дело №1: «Тень на таблицах»</b>\n"
+    "Один студент оставил незакрытый конспект — и теперь цифры шепчут по ночам."
+)
+
+TRANS_2 = (
+    "Мия гасит свечу и указывает на винтовую лестницу: «Чердак. Там живёт\n"
+    "призрак, который давно просился на переработку. Экология — дело второе».\n\n"
+    "🕯 <b>Дело №2: «Мусор, который не призрак»</b>\n"
+    "На чердаке Архива завёлся призрак. Присмотрись: это не призрак —\n"
+    "это пластиковая бутылка 1997 года, которую забыли рассортировать.\n"
+    "Разберём чердак!"
+)
+
+TRANS_3 = (
+    "Мия ведёт тебя по коридору и останавливается у двери без таблички.\n"
+    "«Это дело никто так и не завершил. Даже я не знаю всего, что за этой\n"
+    "дверью, — говорит она тихо. — Но у него есть тайная часть…»\n\n"
+    "🕯 <b>Дело №3: «Тень без имени»</b>\n"
+    "У этого дела нет имени — его не завершил никто и никогда.\n"
+    "Тени нужен человек, который сделает доброе дело прямо сейчас."
+)
+
+TRANS_4 = (
+    "Мия проводит тебя в картинную галерею Архива: рамы на стенах —\n"
+    "все пустые. «Культура греет лучше свечи, — улыбается она. —\n"
+    "Заполни раму — и Тень внутри неё станет делом».\n\n"
+    "🕯 <b>Дело №4: «Портрет в скетчбуке»</b>\n"
+    "В Архиве висит пустая рама. Тень, которую коснётся картина,\n"
+    "перестанет быть тенью."
+)
+
+TRANS_5 = (
+    "Мия останавливается перед зеркальным залом и впервые за ночь молчит.\n"
+    "«Последнее дело — про тебя самого, — наконец говорит она. — Тело,\n"
+    "которое не двигается, тоже однажды станет тенью».\n\n"
+    "🕯 <b>Дело №5: «Зеркало без отражения»</b>"
+)
+
+TRANS_FINAL = (
+    "Мия снимает лампу с крюка и держит её над столом: «Пять дел закрыты,\n"
+    "Секретарь. Осталось сложить ключи вместе — и Архив закроется навсегда»."
+)
+
+# --- Тайное задание (дело №3) ---
+
+SECRET_LORE = (
+    "🌙 <b>Тайное задание</b>\n\n"
+    "Мия понижает голос, и свеча в её руке дрожит: «Это дело не хранится на\n"
+    "полках Архива. Его передают из рук в руки — через страницу в сети,\n"
+    "которую я открываю немногим».\n\n"
+    "Она проводит пальцем по воздуху — и перед тобой вспыхивает свиток-ссылка.\n"
+    "Открой тайное задание, выполни его — а слово, которое спрятано внутри,\n"
+    "шепни мне сюда в чат."
 )
 
 # ============================================================
@@ -93,9 +163,9 @@ RIDDLES = [
      {"дедлайн", "deadline"}, "Три из них — источники знаний. Один — источник паники."),
     ("Третий вопрос:\n«Прочитай слово наоборот: ТЕНЬ».",
      {"ьнет"}, "Слово из четырёх букв. Просто разверни."),
-    ("Четвёртый вопрос — шифр:\n«АТЬЯСЕР НЕД» — это анаграмма фразы,\n"
+    ("Четвёртый вопрос — шифр:\n«ЬДЙСЕ НЕМЕ» — это анаграмма фразы,\n"
      "которой Хранитель закрывает дела. Расшифруй.",
-     {"семьдней", "7дней"}, "Сколько ночей длится Хэллоуинская неделя? Посчитай перестановки."),
+     {"семьдней", "7дней"}, "Сколько ночей длится Хэллоуинская неделя? ПИШИ С ЗАГЛАВНОЙ БУКВЫ."),
 ]
 
 SORT_ITEMS = [
@@ -110,9 +180,9 @@ SORT_ITEMS = [
 
 CODES = ["ЬНЕТ", "СОРТИРОВКА", "ДОБРО", "СВЕТ", "ОТРАЖЕНИЕ"]
 
-# --- Секретное задание дела №3 ---
-SECRET_TASK_NAME = "Ночной переписчик"   # название задания в «Другом Деле»
-CIPHER_LINE = "15-16-25-30"              # числа, вшитые в описание задания
+# --- Тайное задание дела №3 ---
+SECRET_TASK_NAME = "Ночной переписчик"   # название задания на сайте
+CIPHER_LINE = "15-16-25-30"              # числа, спрятанные на сайте
 L3_SECRET = {"ночь"}                     # разгадка (НОЧЬ: Н=15, О=16, Ч=25, Ь=30)
 
 # ============================================================
@@ -132,6 +202,15 @@ async def send_img(m: Message, path: str, caption: str = None):
     except Exception:
         return False
 
+async def send_stage(m: Message, img: str, lore: str, task: str = None, kb=None):
+    """Лор одним сообщением с картинкой; через 5 секунд — задание."""
+    sent = await send_img(m, img, caption=lore)
+    if not sent:
+        await m.answer(lore, parse_mode="HTML")
+    if task:
+        await asyncio.sleep(STAGE_GAP)
+        await m.answer(task, parse_mode="HTML", reply_markup=kb)
+
 # ============================================================
 #  КЛАВИАТУРЫ (кнопки друг под другом)
 # ============================================================
@@ -146,8 +225,10 @@ SORT_KB = inline_kb(["Опасное", "Переработка", "Не пере�
 BONUS_KB = inline_kb(["Цвет краски", "Тип пластика для переработки",
                       "Срок годности", "Штрих-код"],
                      ["b_color", "b_plastic", "b_exp", "b_bar"])
-L3_KB = inline_kb(["Задание из «Другого Дела»", "Звонок близкому"],
+L3_KB = inline_kb(["Тайное задание", "Звонок близкому"],
                   ["l3_task", "l3_call"])
+URL_KB = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="🌙 Открыть тайное задание", url=SITE_URL)]])
 L4_KB = inline_kb(["Бестиарий Теней", "Хоррор-катрен", "Викторина"],
                   ["l4_best", "l4_poem", "l4_quiz"])
 QUIZ_KB = inline_kb(["Марло", "Булгаков", "Гоголь"],
@@ -304,32 +385,10 @@ class Quest(StatesGroup):
     done = State()
 
 L5_MAZE_TEXT = (
-    "Зеркальный зал пуст. Тени забрали твоё отражение — верни его.\n\n"
     "🗺 Карта зала: из стартовой залы — только <b>вправо</b>; в коридоре —\n"
     "<b>лестница вверх</b>, ещё одна <b>лестница вверх</b>, затем дверь\n"
     "<b>вправо</b> и <b>спуск вниз</b>.\n"
     "Запиши маршрут буквами без пробелов (П — вправо, В — вверх, Н — вниз).")
-
-L5_ENTRY = "\n\n🕯 <b>Дело №5: «Зеркало без отражения»</b>\n" + L5_MAZE_TEXT
-
-L3_CHOICE_TEXT = (
-    "🕯 <b>Дело №3: «Тень без имени»</b>\n"
-    "У этого дела нет имени — его не завершил никто и никогда.\n"
-    "Тени нужен человек, который сделает доброе дело прямо сейчас.\n"
-    "Выбери путь:")
-
-L4_CHOICE_TEXT = (
-    "🕯 <b>Дело №4: «Портрет в скетчбуке»</b>\n"
-    "В Архиве висит пустая рама. Тень, которую коснётся картина,\n"
-    "перестанет быть тенью. Выбери, чем заполнить раму:")
-
-TASK1_HEAD = "🕯 <b>Дело №1: «Тень на таблицах»</b>\n" \
-    "Один студент оставил незакрытый конспект — и теперь цифры шепчут по ночам.\n\n"
-
-TASK2_HEAD = ("🕯 <b>Дело №2: «Мусор, который не призрак»</b>\n"
-              "На чердаке Архива завёлся призрак. Присмотрись: это не призрак —\n"
-              "это пластиковая бутылка 1997 года, которую забыли рассортировать.\n"
-              "Разберём чердак!\n\n")
 
 # ============================================================
 #  ОБЩИЕ ВХОДЫ В ИГРУ (без взаимных вызовов — рекурсия невозможна)
@@ -338,8 +397,7 @@ TASK2_HEAD = ("🕯 <b>Дело №2: «Мусор, который не приз
 async def begin_registration(m: Message, state: FSMContext):
     await state.set_state(Quest.intro)
     await state.set_data({})
-    await m.answer(LORE_INTRO, parse_mode="HTML")
-    await send_img(m, "img_intro.png")
+    await send_stage(m, "img_intro.png", LORE_INTRO)
     await m.answer("Назови своё имя, Ночной Секретарь.")
 
 async def continue_quest(m: Message, state: FSMContext, reentry: bool = False):
@@ -350,45 +408,36 @@ async def continue_quest(m: Message, state: FSMContext, reentry: bool = False):
     lvl = row[3] or 0
     if reentry:
         await m.answer("Тень привела тебя обратно.")
-    if lvl == 0:
+    if lvl in (0, 1):
         await state.set_state(Quest.riddle)
         await state.set_data({"r": 0})
-        await send_img(m, "img_task1.png")
-        await m.answer(TASK1_HEAD + RIDDLES[0][0], parse_mode="HTML")
+        await send_stage(m, "img_task1.png", TRANS_1, RIDDLES[0][0])
         return
     if lvl == 2:
         await state.set_state(Quest.sort_item)
         await state.set_data({"idx": 0})
-        await send_img(m, "img_task2.png")
-        await m.answer(TASK2_HEAD + f"Куда отправить: <b>{SORT_ITEMS[0][0]}</b>?",
-                       reply_markup=SORT_KB, parse_mode="HTML")
+        await send_stage(m, "img_task2.png", TRANS_2,
+                         f"Куда отправить: <b>{SORT_ITEMS[0][0]}</b>?", SORT_KB)
         return
     if lvl == 3:
         await state.set_state(Quest.l3_choice)
         await state.set_data({})
-        await send_img(m, "img_task3.png")
-        await m.answer(L3_CHOICE_TEXT, reply_markup=L3_KB, parse_mode="HTML")
+        await send_stage(m, "img_task3.png", TRANS_3, "Выбери путь:", L3_KB)
         return
     if lvl == 4:
         await state.set_state(Quest.l4_choice)
         await state.set_data({})
-        await send_img(m, "img_task4.png")
-        await m.answer(L4_CHOICE_TEXT, reply_markup=L4_KB, parse_mode="HTML")
+        await send_stage(m, "img_task4.png", TRANS_4, "Выбери, чем заполнить раму:", L4_KB)
         return
     if lvl == 5:
         await state.set_state(Quest.l5_maze)
         await state.set_data({})
-        await send_img(m, "img_task5.png")
-        await m.answer(L5_ENTRY, parse_mode="HTML")
+        await send_stage(m, "img_task5.png", TRANS_5, L5_MAZE_TEXT)
         return
     if lvl >= 6:
         await state.set_state(Quest.done)
-        await m.answer("Архив закрыт. Хранитель тихонько полирует лампу 🕯")
+        await m.answer("Архив закрыт. Мия тихонько полирует лампу 🕯")
         return
-    # lvl == 1 — вернуться к загадкам заново
-    await state.set_state(Quest.riddle)
-    await state.set_data({"r": 0})
-    await m.answer(TASK1_HEAD + RIDDLES[0][0], parse_mode="HTML")
 
 # ============================================================
 #  КОМАНДЫ (зарегистрированы ДО игровых состояний —
@@ -606,8 +655,7 @@ async def email_input(m: Message, state: FSMContext):
     await state.set_data({"r": 0})
     await m.answer("✅ Реестр подписан. Двери Архива скрипят и открываются…")
     await asyncio.sleep(PAUSE)
-    await send_img(m, "img_task1.png")
-    await m.answer(TASK1_HEAD + RIDDLES[0][0], parse_mode="HTML")
+    await send_stage(m, "img_task1.png", TRANS_1, RIDDLES[0][0])
 
 # ============================================================
 #  УРОВЕНЬ 1. Обучение
@@ -629,9 +677,8 @@ async def riddle(m: Message, state: FSMContext):
             await reward(m, state, CODES[0],
                          "✅ Конспект закрыт. Цифры замолчали — по крайней мере, до сессии.")
             await asyncio.sleep(PAUSE)
-            await send_img(m, "img_task2.png")
-            await m.answer(TASK2_HEAD + f"Куда отправить: <b>{SORT_ITEMS[0][0]}</b>?",
-                           reply_markup=SORT_KB, parse_mode="HTML")
+            await send_stage(m, "img_task2.png", TRANS_2,
+                             f"Куда отправить: <b>{SORT_ITEMS[0][0]}</b>?", SORT_KB)
     else:
         await wrong(m, state, hint, "ответ: " + ", ".join(sorted(ans)))
 
@@ -705,8 +752,7 @@ async def bonus_ok(c: CallbackQuery, state: FSMContext):
                    "✅ Призрак рассортирован и наконец успокоился. Мусор, рассортированный вовремя,\n"
                    "не призрак, а ресурс.")
     await asyncio.sleep(PAUSE)
-    await send_img(c.message, "img_task3.png")
-    await c.message.answer(L3_CHOICE_TEXT, reply_markup=L3_KB, parse_mode="HTML")
+    await send_stage(c.message, "img_task3.png", TRANS_3, "Выбери путь:", L3_KB)
 
 @dp.callback_query(Quest.sort_bonus_q)
 async def bonus_wrong(c: CallbackQuery):
@@ -715,7 +761,7 @@ async def bonus_wrong(c: CallbackQuery):
     await c.message.answer("❌ Тень качает головой. Попробуй другую кнопку.")
 
 # ============================================================
-#  УРОВЕНЬ 3. Волонтёрство
+#  УРОВЕНЬ 3. Волонтёрство: «Тайное задание» на сайте или звонок
 # ============================================================
 
 @dp.message(Quest.l3_choice)
@@ -726,13 +772,10 @@ async def l3_choice(m: Message, state: FSMContext):
 async def l3_task_cb(c: CallbackQuery, state: FSMContext):
     await c.answer()
     await state.set_state(Quest.l3_task)
-    await c.message.edit_text(
-        "Открой мини-приложение «Другого Дела», раздел «Волонтёрство»,\n"
-        f"и найди задание «{SECRET_TASK_NAME}».\n"
-        "Выполни его — баллы платформа начислит на почту из реестра.\n\n"
-        "А в описании задания Тень спрятала шифр: строка чисел через дефис.\n"
-        "Каждое число — номер буквы в русском алфавите\n"
-        "(считая Ё: А — 1, Я — 33). Расшифруй слово и пришли его мне.")
+    try:
+        await c.message.edit_text(SECRET_LORE, reply_markup=URL_KB, parse_mode="HTML")
+    except Exception:
+        await c.message.answer(SECRET_LORE, reply_markup=URL_KB, parse_mode="HTML")
 
 @dp.callback_query(Quest.l3_choice, F.data == "l3_call")
 async def l3_call_cb(c: CallbackQuery, state: FSMContext):
@@ -753,12 +796,12 @@ async def l3_secret(m: Message, state: FSMContext):
                      "✅ Шифр разгадан — страница переписана набело, и дело получило имя.\n"
                      "Добро, сделанное ночью, светит вдвойне.")
         await asyncio.sleep(PAUSE)
-        await send_img(m, "img_task4.png")
-        await m.answer(L4_CHOICE_TEXT, reply_markup=L4_KB, parse_mode="HTML")
+        await send_stage(m, "img_task4.png", TRANS_4, "Выбери, чем заполнить раму:", L4_KB)
     else:
         await wrong(m, state,
-                    "Каждое число — номер буквы алфавита (с Ё). Открой описание задания «Ночной переписчик».",
-                    f"числа из описания: {CIPHER_LINE} — это слово НОЧЬ")
+                    "Каждое число — номер буквы алфавита (с Ё). Открой тайное задание по ссылке "
+                    "и найди строку чисел в описании.",
+                    f"числа из задания: {CIPHER_LINE} — это слово НОЧЬ")
 
 @dp.message(Quest.l3_call)
 async def l3_call(m: Message, state: FSMContext):
@@ -771,8 +814,7 @@ async def l3_call(m: Message, state: FSMContext):
                      f"✅ История услышана — Тень улыбнулась. Год {digits} занесён в книгу Архива.\n"
                      "Такие разговоры, пока звучат, не дают Теням расти.")
         await asyncio.sleep(PAUSE)
-        await send_img(m, "img_task4.png")
-        await m.answer(L4_CHOICE_TEXT, reply_markup=L4_KB, parse_mode="HTML")
+        await send_stage(m, "img_task4.png", TRANS_4, "Выбери, чем заполнить раму:", L4_KB)
     else:
         await wrong(m, state, "Нужен год первого класса — четыре цифры от 1900 до 2020.",
                     "год поступления в первый класс (1900–2020)")
@@ -829,9 +871,7 @@ async def quiz_ok(c: CallbackQuery, state: FSMContext):
                    "✅ Кристофер Марло — современник Шекспира. Фауст, продавший душу,\n"
                    "в Архиве числится с 1588 года.")
     await asyncio.sleep(PAUSE)
-    await send_img(c.message, "img_task5.png")
-    await c.message.answer("🕯 <b>Дело №5: «Зеркало без отражения»</b>\n" + L5_MAZE_TEXT,
-                           parse_mode="HTML")
+    await send_stage(c.message, "img_task5.png", TRANS_5, L5_MAZE_TEXT)
 
 @dp.callback_query(Quest.l4_quiz)
 async def quiz_wrong(c: CallbackQuery):
@@ -849,9 +889,7 @@ async def l4_best(m: Message, state: FSMContext):
                      f"✅ Твоя Тень занесена в Бестиарий: <b>{', '.join(words)}</b>.\n"
                      "Названная тень — уже наполовину обычный страх.")
         await asyncio.sleep(PAUSE)
-        await send_img(m, "img_task5.png")
-        await m.answer("🕯 <b>Дело №5: «Зеркало без отражения»</b>\n" + L5_MAZE_TEXT,
-                       parse_mode="HTML")
+        await send_stage(m, "img_task5.png", TRANS_5, L5_MAZE_TEXT)
     else:
         await wrong(m, state, "Ровно три разных слова-существительных.",
                     "ровно три различных существительных")
@@ -867,9 +905,7 @@ async def l4_poem(m: Message, state: FSMContext):
                      "✅ Тень прочитала катрен и… заплакала светом.\n"
                      "Твой стих повесят в раме. Слава Хранителя.")
         await asyncio.sleep(PAUSE)
-        await send_img(m, "img_task5.png")
-        await m.answer("🕯 <b>Дело №5: «Зеркало без отражения»</b>\n" + L5_MAZE_TEXT,
-                       parse_mode="HTML")
+        await send_stage(m, "img_task5.png", TRANS_5, L5_MAZE_TEXT)
     else:
         await wrong(m, state, "Ровно 4 строки, в последней — слово «свет».",
                     "4 строки, последняя содержит слово «свет»")
@@ -922,25 +958,27 @@ async def l5_time(m: Message, state: FSMContext):
                      "улыбнулось человеку.\n\n"
                      "🔥 <b>АРХИВ ГОТОВ К ЗАКРЫТИЮ</b> 🔥")
         await asyncio.sleep(PAUSE)
-        await m.answer("Введи все пять кодовых слов одной строкой, через пробел,\n"
-                       "в порядке дел 1–5.")
+        await send_stage(m, None, TRANS_FINAL,
+                         "Введи все пять кодовых слов одной строкой, через пробел,\n"
+                         "в порядке дел 1–5.")
     else:
         await wrong(m, state, "Из 8:30 вычти дорогу, сборы и запас.", "07:10")
 
 # ============================================================
-#  ФИНАЛ (без сертификата: фото + итоговый текст)
+#  ФИНАЛ: лор и итоговый «сертификат» одним сообщением с фото
 # ============================================================
 
 @dp.message(Quest.final)
 async def final(m: Message, state: FSMContext):
     row = await get_player(m.from_user.id)
-    nick, sparks, code_l3 = (row[0], None, None)
+    nick, sparks, code_l3 = (row[0], 0, None) if row else ("Секретарь", 0, None)
     if row:
         async with aiosqlite.connect(DB) as db:
             cur = await db.execute(
                 "SELECT sparks, code_l3 FROM players WHERE user_id=?", (m.from_user.id,))
             s = await cur.fetchone()
-        sparks, code_l3 = (s if s else (0, None))
+        if s:
+            sparks, code_l3 = s
     expected = norm(" ".join(CODES))
     said = norm(m.text)
     # Страховка для старых записей: третий код мог сохраниться как год звонка
@@ -950,7 +988,7 @@ async def final(m: Message, state: FSMContext):
         ok = said == alt
     if ok:
         await state.set_state(Quest.done)
-        cert_caption = (
+        cert_text = (
             "🔦 <b>СЕРТИФИКАТ НОЧНОГО СЕКРЕТАРЯ</b>\n\n"
             f"<b>{nick}</b>\n"
             f"закрыл(а) все дела Архива — {sparks} огоньков\n\n"
@@ -958,10 +996,11 @@ async def final(m: Message, state: FSMContext):
             "Отправь это сообщение в мини-приложение «Другого Дела» —\n"
             "там зачтут задание и начислят баллы на почту из реестра.\n\n"
             "«Дело, доведённое до конца, не боится темноты»")
-        await m.answer(LORE_FINAL.format(nick=nick), parse_mode="HTML")
-        sent = await send_img(m, "img_final.png", caption=cert_caption)
+        caption = LORE_FINAL.format(nick=nick) + "\n\n" + cert_text
+        sent = await send_img(m, "img_final.png", caption=caption)
         if not sent:
-            await m.answer(cert_caption, parse_mode="HTML")
+            await m.answer(LORE_FINAL.format(nick=nick), parse_mode="HTML")
+            await m.answer(cert_text, parse_mode="HTML")
     else:
         await wrong(m, state, "Пять слов, по одному с каждого уровня, в порядке дел 1–5.",
                     "коды уровней в порядке 1–5 через пробел")
@@ -969,7 +1008,7 @@ async def final(m: Message, state: FSMContext):
 @dp.message(Quest.done)
 async def done(m: Message):
     await m.answer(random.choice([
-        "Архив закрыт. Хранитель полирует лампу и улыбается 🕯",
+        "Архив закрыт. Мия полирует лампу и улыбается 🕯",
         "Тени впервые за год спят спокойно. Спасибо, Секретарь.",
         "Ты уже всё закрыл. Отдыхай — дело доведено до конца."]))
 
@@ -991,7 +1030,7 @@ async def reminders():
                     await bot.send_message(uid, random.choice([
                         "🕯 Шёпот из Архива: дела сами себя не закроют, Секретарь.",
                         "🕯 Тень шуршит страницами: /quest — вернись к делу.",
-                        "🕯 Одна Тень уже проснулась. Не заставляй ждать остальных."]))
+                        "🕯 Мия зажгла лампу и ждёт. /quest — вернись к делу."]))
                     await save(uid)
                 except Exception:
                     pass
