@@ -3,106 +3,175 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Тайное задание — Архив Ночных Дел</title>
+<title>Тайное задание · Ночной переписчик</title>
 <style>
-  :root { --gold:#d9a441; --cream:#f3e9d2; }
-  * { box-sizing:border-box; margin:0; padding:0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    min-height:100vh; color:var(--cream);
-    background: radial-gradient(circle at 50% 8%, #3b2a55 0%, #1a1030 45%, #0c0720 100%);
+    min-height: 100vh;
+    background: radial-gradient(ellipse at 50% 0%, #2a1d4a 0%, #1a1130 45%, #120a24 100%);
     font-family: Georgia, 'Times New Roman', serif;
-    display:flex; justify-content:center; padding:24px 16px;
+    color: #e8e0f0;
+    padding: 40px 16px 60px;
   }
-  .page { max-width:640px; width:100%; }
-  .lamp {
-    text-align:center; margin-bottom:18px; font-size:44px;
-    text-shadow: 0 0 24px rgba(255,179,71,.85), 0 0 60px rgba(255,179,71,.4);
+  .candle {
+    text-align: center;
+    font-size: 40px;
+    margin-bottom: 14px;
+    filter: drop-shadow(0 0 12px rgba(255, 190, 90, .55));
+    animation: flicker 2.4s infinite;
   }
-  h1 { color:var(--gold); text-align:center; font-size:26px; letter-spacing:2px; margin-bottom:6px; }
-  .sub { text-align:center; color:#cfc4a8; font-style:italic; margin-bottom:26px; }
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .82; }
+  }
+  h1 {
+    text-align: center;
+    color: #e0a83c;
+    letter-spacing: .18em;
+    font-size: 26px;
+    margin-bottom: 8px;
+    text-shadow: 0 0 18px rgba(224, 168, 60, .35);
+  }
+  .sub {
+    text-align: center;
+    color: #b8a8d0;
+    font-style: italic;
+    font-size: 15px;
+    margin-bottom: 34px;
+  }
   .card {
-    background:rgba(12,7,32,.72); border:1px solid var(--gold);
-    border-radius:14px; padding:22px; margin-bottom:18px;
-    box-shadow:0 0 30px rgba(217,164,65,.12);
+    max-width: 640px;
+    margin: 0 auto 26px;
+    background: linear-gradient(160deg, rgba(35, 22, 60, .85), rgba(24, 14, 44, .9));
+    border: 1px solid rgba(224, 168, 60, .45);
+    border-radius: 14px;
+    padding: 26px 28px;
+    box-shadow: 0 0 24px rgba(224, 168, 60, .08), inset 0 0 30px rgba(20, 10, 40, .5);
+    line-height: 1.75;
+    font-size: 16.5px;
   }
-  .card h2 { color:var(--gold); font-size:20px; margin-bottom:12px; }
-  .card p { line-height:1.65; margin-bottom:10px; }
-  .cipher {
-    text-align:center; font-size:30px; letter-spacing:6px; color:#ffb347;
-    text-shadow:0 0 16px rgba(255,179,71,.6); margin:14px 0;
-    font-family:'Courier New', monospace;
+  .card p + p { margin-top: 14px; }
+  .rubric {
+    color: #e0a83c;
+    font-weight: bold;
+    font-size: 19px;
+    margin-bottom: 12px;
+    letter-spacing: .04em;
   }
-  .note { color:#cfc4a8; font-style:italic; }
-  .check { display:flex; gap:10px; margin-top:16px; }
-  .check input {
-    flex:1; background:rgba(243,233,210,.08); border:1px solid var(--gold);
-    color:var(--cream); border-radius:8px; padding:12px 14px; font-size:16px;
-    outline:none; font-family:inherit;
+  .num {
+    color: #f0b050;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(240, 176, 80, .6);
+    padding: 0 2px;
   }
-  .check input:focus { box-shadow:0 0 12px rgba(217,164,65,.4); }
-  .check button {
-    background:var(--gold); color:#1a1030; border:0; border-radius:8px;
-    padding:12px 18px; font-weight:bold; font-size:15px; cursor:pointer;
-    font-family:inherit;
+  .whisper { margin-top: 22px; text-align: center; }
+  .whisper input {
+    width: 100%;
+    max-width: 320px;
+    padding: 12px 16px;
+    background: rgba(15, 8, 30, .8);
+    border: 1px solid rgba(224, 168, 60, .5);
+    border-radius: 8px;
+    color: #f0e8d0;
+    font-size: 17px;
+    font-family: inherit;
+    text-align: center;
+    outline: none;
   }
-  .check button:hover { filter:brightness(1.1); }
-  #result { margin-top:12px; text-align:center; min-height:24px; }
-  .ok  { color:#8fe388; }
-  .bad { color:#e08a8a; }
-  footer { text-align:center; color:#8a7f68; font-size:13px; margin-top:22px; font-style:italic; }
+  .whisper input:focus { border-color: #e0a83c; box-shadow: 0 0 14px rgba(224, 168, 60, .3); }
+  .whisper button {
+    display: block;
+    margin: 14px auto 0;
+    padding: 12px 34px;
+    background: linear-gradient(160deg, #6a4510, #4a2f08);
+    border: 1px solid #e0a83c;
+    border-radius: 8px;
+    color: #f5d788;
+    font-size: 16px;
+    font-family: inherit;
+    cursor: pointer;
+    letter-spacing: .06em;
+  }
+  .whisper button:hover { box-shadow: 0 0 16px rgba(224, 168, 60, .4); }
+  #result {
+    margin-top: 14px;
+    text-align: center;
+    min-height: 22px;
+    font-size: 15px;
+    color: #c8b8e0;
+  }
+  #result.ok { color: #a8e0a0; }
+  .foot {
+    max-width: 640px;
+    margin: 0 auto;
+    text-align: center;
+    color: #9a8ab8;
+    font-size: 14px;
+    font-style: italic;
+    line-height: 1.6;
+  }
 </style>
 </head>
 <body>
-<div class="page">
-  <div class="lamp">🕯</div>
-  <h1>ТАЙНОЕ ЗАДАНИЕ</h1>
-  <p class="sub">Архив Ночных Дел · дело №3 · «Тень без имени»</p>
 
-  <div class="card">
-    <p>— Ты дошёл до тайной части, — Мия понижает голос и прикрывает дверь.
-       Это задание не хранится на полках: его передают из рук в руки,
-       и сейчас оно передаётся тебе.</p>
-  </div>
+<div class="candle">🕯️</div>
+<h1>ТАЙНОЕ ЗАДАНИЕ</h1>
+<div class="sub">Архив Ночных Дел &middot; дело №3 &middot; &laquo;Тень без имени&raquo;</div>
 
-  <div class="card">
-    <h2>«Ночной переписчик»</h2>
-    <p>Каждую ночь Хранительница переписывает дела, которые люди так и не
-       завершили. Записи ведутся тайно: имена — на полях, суть — между строк.</p>
-    <p>На обороте последней страницы осталась запись, которую Мия так и
-       не смогла стереть:</p>
-    <p class="cipher">15-16-25-30</p>
-    <p class="note">Каждое число — номер буквы в русском алфавите
-       (считая Ё: А — 1, Б — 2 … Я — 33).</p>
-    <p class="note">Расшифруй слово и шепни его Хранителю в Telegram —
-       именно там Архив примет ответ.</p>
-    <div class="check">
-      <input id="answer" placeholder="Впиши расшифрованное слово" autocomplete="off">
-      <button onclick="check()">Шепнуть Архиву</button>
-    </div>
-    <p id="result"></p>
-  </div>
-
-  <footer>«Дело, доведённое до конца, не боится темноты»</footer>
+<div class="card">
+  <p>&mdash; Ты дошёл до тайной части, &mdash; голос из темноты не принадлежит никому из живых. Это
+  задание не хранится на полках: его передают из рук в руки, и сейчас оно передаётся тебе.</p>
 </div>
 
+<div class="card">
+  <div class="rubric">&laquo;Ночной переписчик&raquo;</div>
+   <p>В подземелье старой библиотеки живёт Переписчик — ночное существо в выцветшем
+    капюшоне, с совиным пером. Каждую ночь он выводит на пергаменте дела,
+    которые люди так и не завершили. Записи ведутся тайно: имена — на полях,
+    суть — между строк.</p>
+
+  <p>В ту ночь, о которой пойдёт речь, свеча Переписчика заплыла воском на
+  <span class="num">15-й</span> строке его листа, — и он не стал её менять. За окном
+  на карнизе сидит <span class="num">16</span> ворон &mdash; на одну больше, чем всегда.
+  Лишняя ворона не каркала. Лишняя — читала.</p>
+
+ <p>От стола до сейфа, где спят незавершённые дела, &mdash; ровно <span class="num">25</span> шагов, 
+  Он считает их вслух всякий раз, когда сносит
+    новые листы. В ту ночь он сбился на двадцать шестом — и впервые за годы
+    оглянулся.</p>
+
+  <p>В конце листа он ставит подпись — замкнутую цепь из <span class="num">30</span> петель. Но в ту ночь петли не замкнулись: последняя осталась раскрытой — как
+    дверь, которую кто-то должен однажды открыть.</p>
+
+  <p>На обороте последней страницы осталась запись, которую Переписчик так и не смог стереть.
+  Четыре числа &mdash; четыре буквы. Каждое число &mdash; номер буквы в русском алфавите (считая Ё:
+  А&nbsp;&mdash;&nbsp;1, Я&nbsp;&mdash;&nbsp;33). Собери слово и шепни его Хранителю.</p>
+  <div class="whisper">
+    <input type="text" id="answer" placeholder="шепни слово&hellip;" autocomplete="off">
+    <button onclick="check()">Шепнуть Хранителю</button>
+    <div id="result"></div>
+  </div>
+</div>
+
+<div class="foot">
+  Слово шепчется Хранителю в Telegram &mdash; в чат с ботом квеста.<br>
+  «Дело, доведённое до конца, не боится темноты».
+</div>
+
+
 <script>
-  function check() {
-    var v = document.getElementById('answer').value.trim().toLowerCase();
-    var r = document.getElementById('result');
-    if (v === 'ночь') {
-      r.className = 'ok';
-      r.textContent = '🌙 Верно! Слово «НОЧЬ». Теперь вернись в Telegram и напиши его Хранителю.';
-    } else if (v.length === 0) {
-      r.className = 'bad';
-      r.textContent = 'Страница пуста. Впиши слово.';
-    } else {
-      r.className = 'bad';
-      r.textContent = 'Не то. Каждое число — номер буквы алфавита (с Ё). Попробуй ещё раз.';
-    }
+function check() {
+  var val = (document.getElementById('answer').value || '').trim().toLowerCase().replace(/\s+/g, '');
+  var res = document.getElementById('result');
+  if (val === 'ночь') {
+    res.textContent = 'Верно. Теперь шепни это слово Хранителю в Telegram — в чат с ботом.';
+    res.className = 'ok';
+  } else if (val) {
+    res.textContent = 'Не то. Четыре числа — четыре буквы алфавита.';
+    res.className = '';
   }
-  document.getElementById('answer').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') check();
-  });
+}
 </script>
+
 </body>
 </html>
